@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 舆情分析助手 · 历史记录</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #ffffff;
+        }
+
+        .sidebar {
+            width: 260px;
+            background-color: #202123;
+            color: #ececf1;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            flex-shrink: 0;
+        }
+
+        .new-chat-btn {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .new-chat-btn:hover { background-color: #2563eb; }
+
+        .chat-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .chat-list::-webkit-scrollbar { width: 6px; }
+        .chat-list::-webkit-scrollbar-thumb { background-color: #4b5563; border-radius: 3px; }
+
+        /* 会话项：左边标题，右边删除按钮 */
+        .chat-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #d1d5db;
+            transition: background-color 0.2s;
+            gap: 8px;
+        }
+        .chat-item:hover { background-color: #2d3748; }
+        .chat-item.active { background-color: #374151; color: #ffffff; }
+
+        .chat-item-title {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-item-delete {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            color: #9ca3af;
+            font-size: 16px;
+            line-height: 1;
+            opacity: 0;
+            transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+        }
+        .chat-item:hover .chat-item-delete { opacity: 1; }
+        .chat-item-delete:hover {
+            background-color: #7f1d1d;
+            color: #fecaca;
+        }
+
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+        }
+
+        .chat-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 18px;
+            font-weight: 600;
+            color: #111827;
+            text-align: center;
+        }
+
+        .message-area {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background-color: #f9fafb;
+        }
+
+        .message {
+            max-width: 80%;
+            display: flex;
+            flex-direction: column;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user { align-self: flex-end; }
+        .message.user .bubble {
+            background-color: #3b82f6;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 16px 16px 4px 16px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .message.ai { align-self: flex-start; }
+        .message.ai .bubble {
+            background-color: #ffffff;
+            color: #1f2937;
+            padding: 16px;
+            border-radius: 16px 16px 16px 4px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            font-size: 15px;
+            line-height: 1.6;
+            width: 100%;
+        }
+
+        .loading-dots {
+            display: none;
+            color: #6b7280;
+            font-size: 14px;
+            padding: 8px 16px;
+            align-self: flex-start;
+        }
+        .loading-dots::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+
+        .status-tag {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .tag-new-media {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #34d399;
+        }
+        .tag-haters {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #f87171;
+        }
+        .hater-list {
+            margin-top: 8px;
+            padding-left: 20px;
+            color: #7f1d1d;
+            font-size: 14px;
+        }
+
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid #e5e7eb;
+            background-color: #ffffff;
+            display: flex;
+            gap: 12px;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 14px 20px;
+            border: 1px solid #d1d5db;
+            border-radius: 24px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background-color: #f3f4f6;
+        }
+        .input-area input:focus {
+            border-color: #3b82f6;
+            background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        .input-area button {
+            padding: 0 24px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .input-area button:hover { background-color: #2563eb; }
+        .input-area button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+
+        .empty-state {
+            text-align: center;
+            color: #9ca3af;
+            margin-top: 50px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <button class="new-chat-btn" onclick="createNewChat()">
+            <span>+</span> 新建聊天
+        </button>
+        <div class="chat-list" id="chatList"></div>
+    </div>
+
+    <div class="main-chat">
+        <div class="chat-header" id="chatHeader">请新建一个聊天</div>
+
+        <div class="message-area" id="messageArea">
+            <div class="empty-state" id="emptyState">👋 点击左侧【新建聊天】开始分析</div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="uidInput" placeholder="输入微博 UID 后按回车或点击发送..." disabled
+                   onkeydown="if(event.key==='Enter') sendMessage()">
+            <button id="sendBtn" onclick="sendMessage()" disabled>发送</button>
+        </div>
+    </div>
+
+    <script>
+        let currentThreadId = null;
+        let chats = [];
+
+        const API_BASE = 'http://127.0.0.1:8000';
+        const STORAGE_KEY = 'ai_public_opinion_threads';
+
+        function loadThreadsFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const saved = JSON.parse(raw);
+                    if (Array.isArray(saved) && saved.length > 0) {
+                        return saved.map(item => ({
+                            id: item.id,
+                            title: item.title || `分析会话 ${item.id.slice(-4)}`,
+                            uid: item.uid || null
+                        }));
+                    }
+                }
+            } catch (e) {
+                console.warn('读取 localStorage 失败:', e);
+            }
+            return [];
+        }
+
+        function saveThreadsToStorage() {
+            try {
+                const toSave = chats.map(c => ({
+                    id: c.id,
+                    title: c.title,
+                    uid: c.uid || null
+                }));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+            } catch (e) {
+                console.warn('写入 localStorage 失败:', e);
+            }
+        }
+
+        async function fetchAllThreads() {
+            try {
+                const res = await fetch(`${API_BASE}/threads`);
+                if (res.ok) {
+                    const data = await res.json();
+                    let threads = [];
+                    if (Array.isArray(data)) {
+                        threads = data;
+                    } else if (data.threads && Array.isArray(data.threads)) {
+                        threads = data.threads;
+                    }
+                    if (threads.length > 0) {
+                        return threads.map(t => ({
+                            id: t.thread_id || t.id,
+                            title: t.title || `分析会话 ${(t.thread_id || t.id).slice(-4)}`,
+                            uid: t.uid || null
+                        }));
+                    }
+                }
+            } catch (e) {
+                console.log('后端 /threads 不可用，使用 localStorage 数据');
+            }
+            return loadThreadsFromStorage();
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const storedChats = loadThreadsFromStorage();
+            if (storedChats.length > 0) {
+                chats = storedChats;
+                renderChatList();
+            } else {
+                updateUIForEmptyState();
+            }
+
+            try {
+                const serverChats = await fetchAllThreads();
+                if (serverChats && serverChats.length > 0) {
+                    const mergedMap = new Map();
+                    chats.forEach(c => mergedMap.set(c.id, c));
+                    serverChats.forEach(sc => {
+                        if (mergedMap.has(sc.id)) {
+                            const existing = mergedMap.get(sc.id);
+                            const backendIsDefault = !sc.title || sc.title.startsWith('分析会话');
+                            mergedMap.set(sc.id, {
+                                ...existing,
+                                ...sc,
+                                title: backendIsDefault ? existing.title : sc.title
+                            });
+                        } else {
+                            mergedMap.set(sc.id, sc);
+                        }
+                    });
+                    chats = Array.from(mergedMap.values());
+                    saveThreadsToStorage();
+                    renderChatList();
+                }
+            } catch (e) {
+                console.warn('从后端获取会话列表失败，继续使用本地数据');
+            }
+
+            if (chats.length === 0) {
+                updateUIForEmptyState();
+            }
+        });
+
+        function createNewChat() {
+            const threadId = Date.now().toString() + Math.random().toString(36).substring(2, 6);
+            const defaultTitle = `分析会话 ${chats.length + 1}`;
+            const newChat = { id: threadId, title: defaultTitle, uid: null };
+            chats.push(newChat);
+            saveThreadsToStorage();
+            renderChatList();
+            switchChat(threadId, defaultTitle);
+        }
+
+        // ========== 渲染侧边栏（每项右侧带删除按钮） ==========
+        function renderChatList() {
+            const listEl = document.getElementById('chatList');
+            listEl.innerHTML = '';
+            chats.forEach(chat => {
+                const item = document.createElement('div');
+                item.className = `chat-item ${chat.id === currentThreadId ? 'active' : ''}`;
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'chat-item-title';
+                titleSpan.innerText = chat.title;
+
+                const delBtn = document.createElement('span');
+                delBtn.className = 'chat-item-delete';
+                delBtn.innerText = '×';
+                delBtn.title = '删除该会话';
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();   // 防止触发切换会话
+                    deleteChat(chat.id);
+                };
+
+                item.appendChild(titleSpan);
+                item.appendChild(delBtn);
+                item.onclick = () => switchChat(chat.id, chat.title);
+                listEl.appendChild(item);
+            });
+        }
+
+        // ========== 删除会话 ==========
+        async function deleteChat(threadId) {
+            if (!confirm('确定要删除这个聊天记录吗？删除后不可恢复。')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/thread/${encodeURIComponent(threadId)}`, {
+                    method: 'DELETE'
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            } catch (err) {
+                console.error('删除失败:', err);
+                alert('删除失败，请检查后端是否启动。');
+                return;
+            }
+
+            // 从本地数组移除
+            chats = chats.filter(c => c.id !== threadId);
+            saveThreadsToStorage();
+
+            // 如果删的是当前会话，清空右侧
+            if (currentThreadId === threadId) {
+                currentThreadId = null;
+                document.getElementById('chatHeader').innerText = '请新建一个聊天';
+                const messageArea = document.getElementById('messageArea');
+                messageArea.innerHTML = '<div class="empty-state">👋 点击左侧【新建聊天】开始分析</div>';
+                updateUIForEmptyState();
+            }
+
+            renderChatList();
+
+            if (chats.length === 0) {
+                updateUIForEmptyState();
+            }
+        }
+
+        async function switchChat(threadId, title) {
+            currentThreadId = threadId;
+            renderChatList();
+
+            const chat = chats.find(c => c.id === threadId);
+            document.getElementById('chatHeader').innerText = chat ? chat.title : `与 ${threadId.slice(-4)} 的对话`;
+
+            const messageArea = document.getElementById('messageArea');
+            const uidInput = document.getElementById('uidInput');
+            const sendBtn = document.getElementById('sendBtn');
+
+            messageArea.innerHTML = '';
+            const loadingTip = document.createElement('div');
+            loadingTip.className = 'empty-state';
+            loadingTip.innerText = '正在加载历史记录...';
+            messageArea.appendChild(loadingTip);
+
+            uidInput.disabled = true;
+            sendBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/history/${encodeURIComponent(threadId)}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const messages = Array.isArray(data) ? data : (data.messages || []);
+
+                messageArea.innerHTML = '';
+
+                if (messages.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'empty-state';
+                    empty.innerText = '请输入微博 UID 开始查询舆情';
+                    messageArea.appendChild(empty);
+                } else {
+                    messages.forEach(msg => {
+                        if (msg.role === 'user') {
+                            appendMessage('user', msg.content);
+                        } else if (msg.role === 'assistant') {
+                            let payload = msg.content;
+                            if (typeof payload === 'string') {
+                                try { payload = JSON.parse(payload); } catch (e) {}
+                            }
+                            if (payload && typeof payload === 'object') {
+                                appendAIMessage(payload);
+                            } else {
+                                appendMessage('ai', String(payload));
+                            }
+                        }
+                    });
+                    messageArea.scrollTop = messageArea.scrollHeight;
+                }
+            } catch (err) {
+                console.error('加载历史失败:', err);
+                messageArea.innerHTML = '';
+                const errTip = document.createElement('div');
+                errTip.className = 'empty-state';
+                errTip.innerText = '⚠️ 历史记录加载失败，可继续发送新消息。';
+                messageArea.appendChild(errTip);
+            } finally {
+                uidInput.disabled = false;
+                sendBtn.disabled = false;
+                uidInput.focus();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('uidInput');
+            const uid = input.value.trim();
+            if (!uid) return;
+
+            input.value = '';
+
+            const messageArea = document.getElementById('messageArea');
+            const sendBtn = document.getElementById('sendBtn');
+
+            const emptyState = messageArea.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            appendMessage('user', uid);
+
+            let loadingDots = document.getElementById('loadingDots');
+            if (!loadingDots) {
+                loadingDots = document.createElement('div');
+                loadingDots.id = 'loadingDots';
+                loadingDots.className = 'loading-dots';
+                loadingDots.innerText = 'AI 正在分析';
+                messageArea.appendChild(loadingDots);
+            }
+            loadingDots.style.display = 'block';
+
+            sendBtn.disabled = true;
+            input.disabled = true;
+            messageArea.scrollTop = messageArea.scrollHeight;
+
+            const currentChat = chats.find(c => c.id === currentThreadId);
+            if (currentChat && !currentChat.uid) {
+                currentChat.uid = uid;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid, thread_id: currentThreadId })
+                });
+
+                if (!response.ok) throw new Error('网络请求失败');
+                const data = await response.json();
+                appendAIMessage(data);
+
+                if (currentChat && data.thread_title) {
+                    currentChat.title = data.thread_title;
+                    document.getElementById('chatHeader').innerText = currentChat.title;
+                    saveThreadsToStorage();
+                    renderChatList();
+                }
+            } catch (error) {
+                console.error(error);
+                appendMessage('ai', '❌ 查询失败，请检查后端是否启动且配置了跨域。');
+            } finally {
+                if (loadingDots) loadingDots.style.display = 'none';
+                sendBtn.disabled = false;
+                input.disabled = false;
+                input.focus();
+                messageArea.scrollTop = messageArea.scrollHeight;
+            }
+        }
+
+        function appendMessage(role, text) {
+            const messageArea = document.getElementById('messageArea');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.textContent = text;
+            msgDiv.appendChild(bubble);
+            messageArea.appendChild(msgDiv);
+        }
+
+        function appendAIMessage(data) {
+            const messageArea = document.getElementById('messageArea');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message ai';
+
+            let htmlContent = '';
+            if (data.has_new_media && data.media_name && data.media_name !== "无") {
+                htmlContent += `<div class="status-tag tag-new-media">🎵 新作品：《${escapeHtml(data.media_name)}》</div><br>`;
+            }
+            if (data.has_haters && Array.isArray(data.hater_comments) && data.hater_comments.length > 0) {
+                htmlContent += `<div class="status-tag tag-haters">⚠️ 发现黑子评论</div>`;
+                htmlContent += `<ul class="hater-list">`;
+                data.hater_comments.forEach(comment => {
+                    htmlContent += `<li>${escapeHtml(String(comment))}</li>`;
+                });
+                htmlContent += `</ul><br>`;
+            }
+            htmlContent += `<div>${escapeHtml(String(data.weibo_summary || '暂无摘要'))}</div>`;
+            msgDiv.innerHTML = `<div class="bubble">${htmlContent}</div>`;
+            messageArea.appendChild(msgDiv);
+        }
+
+        function updateUIForEmptyState() {
+            document.getElementById('uidInput').disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+        }
+
+        function escapeHtml(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+    </script>
+</body>
+</html>
